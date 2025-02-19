@@ -9,6 +9,7 @@ const Token = union(enum) {
     EQUALS,
     LEFT_PAREN,
     RIGHT_PAREN,
+    SLASH,
     STRING: []const u8,
     IDENTIFIER: []const u8,
     KEYWORD,
@@ -62,6 +63,14 @@ pub const Tokenizer = struct {
         return self.content[self.current + 1];
     }
 
+    fn match(self: *Self, expected: u8) bool {
+        if (self.isAtEnd()) return false;
+        if (self.peek() != expected) return false;
+
+        self.current += 1;
+        return true;
+    }
+
     fn addToken(self: *Self, token: Token) !void {
         switch (token) {
             .IDENTIFIER => {
@@ -98,6 +107,16 @@ pub const Tokenizer = struct {
             '=' => try self.addToken(.EQUALS),
             '(' => try self.addToken(.LEFT_PAREN),
             ')' => try self.addToken(.RIGHT_PAREN),
+            '/' => {
+                // ignore // comments
+                if (self.match('/')) {
+                    while (self.peek() != '\n' and !self.isAtEnd()) {
+                        _ = self.advance();
+                    }
+                } else {
+                    try self.addToken(.SLASH);
+                }
+            },
             '\'', '"' => {
                 while (self.peek() != value and !self.isAtEnd()) {
                     _ = self.advance();
