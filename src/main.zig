@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.main);
-const tokenizer = @import("./tokenizer.zig");
+const Tokenizer = @import("./tokenizer.zig").Tokenizer;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -12,8 +12,13 @@ pub fn main() !void {
     const file_content = try readFile("test.ts", allocator);
     defer allocator.free(file_content);
 
-    const tokens = try tokenizer.tokenize(file_content, arena.allocator());
-    log.info("Found tokens: {d}", .{tokens.len});
+    var tokenizer = Tokenizer.init(
+        arena.allocator(),
+        file_content,
+    );
+    try tokenizer.tokenize();
+
+    log.info("Found tokens: {d}", .{tokenizer.tokens.items.len});
 }
 
 fn readFile(file_path: []const u8, allocator: std.mem.Allocator) ![]u8 {

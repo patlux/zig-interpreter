@@ -8,71 +8,88 @@ const Token = union(enum) {
     COLON,
     EQUALS,
     STRING: []const u8,
+    EOF,
 };
 
 const Errors = error{TokenizeError};
 
-pub fn tokenize(content: []const u8, allocator: std.mem.Allocator) ![]Token {
-    // log.info("Content: {s}", .{content});
+pub const Tokenizer = struct {
+    const Self = @This();
 
-    var arr = std.ArrayList(Token).init(allocator);
-    defer arr.deinit();
+    allocator: std.mem.Allocator,
+    content: []const u8,
 
-    var pos: usize = 0;
+    start: usize,
+    current: usize,
 
-    while (pos < content.len) {
-        const value = content[pos];
+    tokens: std.ArrayList(Token),
 
+    pub fn init(allocator: std.mem.Allocator, content: []const u8) Self {
+        return Tokenizer{
+            .allocator = allocator,
+            .content = content,
+            .start = 0,
+            .current = 0,
+            .tokens = std.ArrayList(Token).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.tokens.deinit();
+    }
+
+    fn isAtEnd(self: *Self) bool {
+        return self.current >= self.content.len;
+    }
+
+    fn advance(self: *Self) u8 {
+        const value = self.content[self.current];
+        self.current += 1;
+        return value;
+    }
+
+    fn peek(self: *Self) u8 {
+        return self.content[self.current];
+    }
+
+    fn peekNext(self: *Self) u8 {
+        return self.content[self.current + 1];
+    }
+
+    fn addToken(self: *Self, token: Token) !void {
+        try self.tokens.append(token);
+    }
+
+    pub fn tokenize(self: *Self) !void {
+        while (!self.isAtEnd()) {
+            self.start = self.current;
+            try self.scanToken();
+        }
+
+        try self.addToken(.EOF);
+
+        for (self.tokens.items) |token| {
+            log.info("Token Type: '{?}'.", .{token});
+        }
+    }
+
+    fn scanToken(self: *Self) !void {
+        const value = self.advance();
         switch (value) {
-            '.' => {
-                try arr.append(Token.DOT);
-            },
-            ';' => {
-                try arr.append(Token.SEMICOLON);
-            },
-            ':' => {
-                try arr.append(Token.COLON);
-            },
-            '=' => {
-                try arr.append(Token.EQUALS);
-            },
+            '.' => try self.addToken(.DOT),
+            ';' => try self.addToken(.SEMICOLON),
+            ':' => try self.addToken(.COLON),
+            '=' => try self.addToken(.EQUALS),
             '\'', '"' => {
-                const str = try readString(allocator, &content, &pos, content[pos]);
-                try arr.append(Token{ .STRING = str });
+                while (self.advance() != value) {}
+                const len = self.current - self.start - 2; // -2 -> ""
+                const str = try self.allocator.alloc(u8, len);
+                std.mem.copyForwards(u8, str, self.content[self.start + 1 .. self.current - 1]);
+                try self.addToken(Token{ .STRING = str });
             },
             else => {
-                // return Errors.TokenizeError;
+                return Errors.TokenizeError;
             },
         }
-
-        pos += 1;
-        // log.info("{c}", .{value});
     }
-
-    // try arr.append(.{ .type = "" });
-    // try arr.append(.{ .type = "" });
-    //
-
-    for (arr.items) |token| {
-        log.info("Token Type: '{?}'.", .{token});
-    }
-
-    return arr.items;
-}
-
-fn readString(allocator: std.mem.Allocator, content: *const []const u8, pos: *usize, del: u8) ![]const u8 {
-    const start = pos.* + 1;
-    var len: usize = 0;
-    while (pos.* < content.len) {
-        pos.* += 1;
-        if (content.*[pos.*] == del) {
-            break;
-        }
-        len += 1;
-    }
-
-    const str = try allocator.alloc(u8, len);
-    std.mem.copyForwards(u8, str, content.*[start .. start + len]);
-
-    return str;
-}
+};
