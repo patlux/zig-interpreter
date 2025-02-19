@@ -7,7 +7,11 @@ const Token = union(enum) {
     SEMICOLON,
     COLON,
     EQUALS,
+    LEFT_PAREN,
+    RIGHT_PAREN,
     STRING: []const u8,
+    IDENTIFIER: []const u8,
+    KEYWORD,
     EOF,
 };
 
@@ -43,12 +47,14 @@ pub const Tokenizer = struct {
     }
 
     fn advance(self: *Self) u8 {
-        const value = self.content[self.current];
+        const value = self.peek();
+        log.debug("advance: '{c}'", .{value});
         self.current += 1;
         return value;
     }
 
     fn peek(self: *Self) u8 {
+        if (self.isAtEnd()) return 0;
         return self.content[self.current];
     }
 
@@ -57,6 +63,16 @@ pub const Tokenizer = struct {
     }
 
     fn addToken(self: *Self, token: Token) !void {
+        switch (token) {
+            .IDENTIFIER => {
+                log.debug("Add token identifier: '{s}'.", .{token.IDENTIFIER});
+            },
+            .STRING => {
+                log.debug("Add token string: '{s}'.", .{token.STRING});
+            },
+            else => {},
+        }
+
         try self.tokens.append(token);
     }
 
@@ -67,27 +83,49 @@ pub const Tokenizer = struct {
         }
 
         try self.addToken(.EOF);
-
-        for (self.tokens.items) |token| {
-            log.info("Token Type: '{?}'.", .{token});
-        }
     }
 
     fn scanToken(self: *Self) !void {
         const value = self.advance();
+        log.debug("- '{c}'", .{value});
         switch (value) {
+            0, '\n' => {
+                return;
+            },
             '.' => try self.addToken(.DOT),
             ';' => try self.addToken(.SEMICOLON),
             ':' => try self.addToken(.COLON),
             '=' => try self.addToken(.EQUALS),
+            '(' => try self.addToken(.LEFT_PAREN),
+            ')' => try self.addToken(.RIGHT_PAREN),
             '\'', '"' => {
-                while (self.advance() != value) {}
-                const len = self.current - self.start - 2; // -2 -> ""
+                while (self.peek() != value and !self.isAtEnd()) {
+                    _ = self.advance();
+                }
+                const len = self.current - self.start;
                 const str = try self.allocator.alloc(u8, len);
-                std.mem.copyForwards(u8, str, self.content[self.start + 1 .. self.current - 1]);
+                std.mem.copyForwards(
+                    u8,
+                    str,
+                    self.content[self.start + 1 .. self.current],
+                );
                 try self.addToken(Token{ .STRING = str });
+                _ = self.advance();
             },
             else => {
+                // Keywords etc.
+                if (std.ascii.isAlphabetic(value)) {
+                    while (std.ascii.isAlphabetic(self.peek())) {
+                        _ = self.advance();
+                    }
+                    const end = self.current;
+                    const len = end - self.start;
+                    const str = try self.allocator.alloc(u8, len);
+                    std.mem.copyForwards(u8, str, self.content[self.start..end]);
+                    log.debug("str: '{s}'", .{str});
+                    try self.addToken(Token{ .IDENTIFIER = str });
+                    return;
+                }
                 return Errors.TokenizeError;
             },
         }

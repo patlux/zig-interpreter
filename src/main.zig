@@ -18,6 +18,9 @@ pub fn main() !void {
     );
     try tokenizer.tokenize();
 
+    for (tokenizer.tokens.items) |token| {
+        log.info("Token Type: '{?}'.", .{token});
+    }
     log.info("Found tokens: {d}", .{tokenizer.tokens.items.len});
 }
 
