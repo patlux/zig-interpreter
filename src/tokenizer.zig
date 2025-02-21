@@ -23,8 +23,9 @@ const Token = union(enum) {
     IDENTIFIER: []const u8,
     INT: usize,
     FLOAT: f32,
-    KEYWORD,
     EOF,
+    OR,
+    AND,
     IF,
     ELSE,
     RETURN,
@@ -35,7 +36,7 @@ const Token = union(enum) {
     FALSE,
 };
 
-const Errors = error{TokenizeError};
+const Errors = error{ TokenizeError, ExpectedChar };
 
 pub const Tokenizer = struct {
     const Self = @This();
@@ -160,6 +161,20 @@ pub const Tokenizer = struct {
             ')' => try self.addToken(.RIGHT_PAREN),
             '{' => try self.addToken(.LEFT_BRACKET),
             '}' => try self.addToken(.RIGHT_BRACKET),
+            '|' => {
+                if (self.match('|')) {
+                    try self.addToken(.OR);
+                } else {
+                    return Errors.ExpectedChar;
+                }
+            },
+            '&' => {
+                if (self.match('&')) {
+                    try self.addToken(.AND);
+                } else {
+                    return Errors.ExpectedChar;
+                }
+            },
             '!' => {
                 // !=
                 if (self.match('=')) {

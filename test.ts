@@ -8,6 +8,6 @@ console.log("Test");
 
 let a = "";
 
-if (5 > 1) {
+if ((5 > 1 && a < 5) || a > 5) {
   a = 100.0;
 }
