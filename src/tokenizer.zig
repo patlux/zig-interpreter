@@ -16,6 +16,8 @@ const Token = union(enum) {
     BANG_EQUAL,
     LEFT_PAREN,
     RIGHT_PAREN,
+    LEFT_BRACKET,
+    RIGHT_BRACKET,
     SLASH,
     STRING: []const u8,
     IDENTIFIER: []const u8,
@@ -23,6 +25,14 @@ const Token = union(enum) {
     FLOAT: f32,
     KEYWORD,
     EOF,
+    IF,
+    ELSE,
+    RETURN,
+    WHILE,
+    VAR,
+    CONST,
+    TRUE,
+    FALSE,
 };
 
 const Errors = error{TokenizeError};
@@ -37,14 +47,25 @@ pub const Tokenizer = struct {
     current: usize,
 
     tokens: std.ArrayList(Token),
+    keywords: std.StringHashMap(Token),
 
-    pub fn init(allocator: std.mem.Allocator, content: []const u8) Self {
+    pub fn init(allocator: std.mem.Allocator, content: []const u8) !Self {
+        var keywords = std.StringHashMap(Token).init(allocator);
+        try keywords.put("if", .IF);
+        try keywords.put("else", .ELSE);
+        try keywords.put("return", .RETURN);
+        try keywords.put("while", .WHILE);
+        try keywords.put("var", .VAR);
+        try keywords.put("const", .CONST);
+        try keywords.put("true", .TRUE);
+        try keywords.put("false", .FALSE);
         return Tokenizer{
             .allocator = allocator,
             .content = content,
             .start = 0,
             .current = 0,
             .tokens = std.ArrayList(Token).init(allocator),
+            .keywords = keywords,
         };
     }
 
@@ -137,6 +158,8 @@ pub const Tokenizer = struct {
             },
             '(' => try self.addToken(.LEFT_PAREN),
             ')' => try self.addToken(.RIGHT_PAREN),
+            '{' => try self.addToken(.LEFT_BRACKET),
+            '}' => try self.addToken(.RIGHT_BRACKET),
             '!' => {
                 // !=
                 if (self.match('=')) {
@@ -179,7 +202,14 @@ pub const Tokenizer = struct {
                     const len = end - self.start;
                     const str = try self.allocator.alloc(u8, len);
                     std.mem.copyForwards(u8, str, self.content[self.start..end]);
-                    try self.addToken(Token{ .IDENTIFIER = str });
+
+                    const token = self.keywords.get(str);
+                    if (token) |t| {
+                        try self.addToken(t);
+                    } else {
+                        try self.addToken(Token{ .IDENTIFIER = str });
+                    }
+
                     return;
                 }
 

@@ -12,7 +12,7 @@ pub fn main() !void {
     const file_content = try readFile("test.ts", allocator);
     defer allocator.free(file_content);
 
-    var tokenizer = Tokenizer.init(
+    var tokenizer = try Tokenizer.init(
         arena.allocator(),
         file_content,
     );
