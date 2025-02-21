@@ -7,11 +7,20 @@ const Token = union(enum) {
     SEMICOLON,
     COLON,
     EQUALS,
+    EQUALS_EQUALS,
+    LESS,
+    LESS_EQUALS,
+    GREATER,
+    GREATER_EQUALS,
+    BANG,
+    BANG_EQUAL,
     LEFT_PAREN,
     RIGHT_PAREN,
     SLASH,
     STRING: []const u8,
     IDENTIFIER: []const u8,
+    INT: usize,
+    FLOAT: f32,
     KEYWORD,
     EOF,
 };
@@ -49,7 +58,7 @@ pub const Tokenizer = struct {
 
     fn advance(self: *Self) u8 {
         const value = self.peek();
-        log.debug("advance: '{c}'", .{value});
+        // log.debug("advance: '{c}'", .{value});
         self.current += 1;
         return value;
     }
@@ -98,15 +107,44 @@ pub const Tokenizer = struct {
         const value = self.advance();
         log.debug("- '{c}'", .{value});
         switch (value) {
-            0, '\n' => {
+            0, '\n', ' ', '\t', '\r' => {
                 return;
             },
             '.' => try self.addToken(.DOT),
             ';' => try self.addToken(.SEMICOLON),
             ':' => try self.addToken(.COLON),
-            '=' => try self.addToken(.EQUALS),
+            '=' => {
+                // ==
+                if (self.match('=')) {
+                    try self.addToken(.EQUALS_EQUALS);
+                } else {
+                    try self.addToken(.EQUALS);
+                }
+            },
+            '<' => {
+                if (self.match('=')) {
+                    try self.addToken(.LESS_EQUALS);
+                } else {
+                    try self.addToken(.LESS);
+                }
+            },
+            '>' => {
+                if (self.match('=')) {
+                    try self.addToken(.GREATER_EQUALS);
+                } else {
+                    try self.addToken(.GREATER);
+                }
+            },
             '(' => try self.addToken(.LEFT_PAREN),
             ')' => try self.addToken(.RIGHT_PAREN),
+            '!' => {
+                // !=
+                if (self.match('=')) {
+                    try self.addToken(.BANG_EQUAL);
+                } else {
+                    try self.addToken(.BANG);
+                }
+            },
             '/' => {
                 // ignore // comments
                 if (self.match('/')) {
@@ -141,10 +179,39 @@ pub const Tokenizer = struct {
                     const len = end - self.start;
                     const str = try self.allocator.alloc(u8, len);
                     std.mem.copyForwards(u8, str, self.content[self.start..end]);
-                    log.debug("str: '{s}'", .{str});
                     try self.addToken(Token{ .IDENTIFIER = str });
                     return;
                 }
+
+                if (std.ascii.isDigit(value)) {
+                    while (std.ascii.isDigit(self.peek())) {
+                        _ = self.advance();
+                    }
+
+                    // e.g. 1.5
+                    if (self.peek() == '.' and std.ascii.isDigit(self.peekNext())) {
+                        _ = self.advance();
+                        while (std.ascii.isDigit(self.peek())) {
+                            _ = self.advance();
+                        }
+                    }
+
+                    const end = self.current;
+                    const len = end - self.start;
+                    const str = try self.allocator.alloc(u8, len);
+                    std.mem.copyForwards(u8, str, self.content[self.start..end]);
+
+                    if (std.mem.containsAtLeast(u8, str, 1, ".")) {
+                        const number = try std.fmt.parseFloat(f32, str);
+                        try self.addToken(Token{ .FLOAT = number });
+                        return;
+                    } else {
+                        const number = try std.fmt.parseInt(usize, str, 10);
+                        try self.addToken(Token{ .INT = number });
+                        return;
+                    }
+                }
+
                 return Errors.TokenizeError;
             },
         }
